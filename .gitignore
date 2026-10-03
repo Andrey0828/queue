@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+*.tsbuildinfo
+.vercel/
+coverage/
+test-results/
+.impeccable/
+.qa/
+next-env.d.ts
