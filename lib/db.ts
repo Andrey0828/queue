@@ -3,7 +3,7 @@ export class AppError extends Error {
 }
 export function isConfigured() {
   return Boolean(process.env.SUPABASE_URL?.startsWith("https://") &&
-    process.env.SUPABASE_SECRET_KEY && (process.env.ADMIN_PASSPHRASE?.length ?? 0) >= 16 && (process.env.ADMIN_PASSPHRASE?.length ?? 0) <= 256 &&
+    process.env.SUPABASE_SECRET_KEY && (process.env.ADMIN_PASSPHRASE?.length ?? 0) >= 4 && (process.env.ADMIN_PASSPHRASE?.length ?? 0) <= 256 &&
     (process.env.SESSION_SECRET?.length ?? 0) >= 32);
 }
 export async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {

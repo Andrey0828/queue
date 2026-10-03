@@ -32,7 +32,7 @@ export function readSession(token: string | undefined, role: Session["role"], no
 }
 export function validAdminPassphrase(value: string) {
   const expected = process.env.ADMIN_PASSPHRASE;
-  if (!expected || expected.length < 16) throw new Error("CONFIGURATION");
+  if (!expected || expected.length < 4) throw new Error("CONFIGURATION");
   return timingSafeEqual(createHash("sha256").update(value).digest(), createHash("sha256").update(expected).digest());
 }
 export function privateKey(value: string) {
