@@ -135,6 +135,39 @@ test("anonymous and authenticated roles cannot read tables or invoke privileged 
 });
 test("schema can be applied again without deleting existing queues", async () => {
   await command("join",await active(),alice,false);
+  const migration = await readFile(new URL("../supabase/migrations/20261009_registration_opening.sql", import.meta.url),"utf8");
+  await db.exec(migration);
+  await db.exec(migration);
+  assert.equal((await snapshot()).queue?.registration_open,true);
   await db.exec(await readFile(new URL("../supabase/schema.sql", import.meta.url),"utf8"));
   assert.equal((await snapshot()).entries.length,1);
+});
+
+
+test("scheduled registration uses database time and respects manual closure", async () => {
+  await db.exec("update public.queues set starts_at=now()+interval '1 hour'");
+  assert.equal((await snapshot()).queue?.registration_open,false);
+  await assert.rejects(command("join",await active(),alice,false),/REGISTRATION_NOT_STARTED/);
+  // Administrative additions are still possible before opening.
+  await command("add",{...await active(),name:"Добавлен Заранее"});
+  await command("toggle",await active());
+  await db.exec("update public.queues set starts_at=now()-interval '1 second'");
+  assert.equal((await snapshot()).queue?.registration_open,false);
+  await assert.rejects(command("join",await active(),alice,false),/REGISTRATION_CLOSED/);
+  await command("toggle",await active());
+  assert.equal((await snapshot()).queue?.registration_open,true);
+  await command("join",await active(),alice,false);
+  assert.equal((await snapshot()).entries.length,2);
+});
+
+test("editing opening time preserves places and gates new joins", async () => {
+  await command("join",await active(),alice,false);
+  await command("edit",{...await active(),title:"Поздняя запись",startsAt:new Date(Date.now()+3600000).toISOString()});
+  assert.equal((await snapshot()).queue?.registration_open,false);
+  assert.equal((await snapshot()).entries.length,1);
+  await assert.rejects(command("join",await active(),bob,false),/REGISTRATION_NOT_STARTED/);
+  await command("leave",await active(),alice,false);
+  await command("edit",{...await active(),title:"Ранняя запись",startsAt:new Date(Date.now()-60000).toISOString()});
+  assert.equal((await snapshot()).queue?.registration_open,true);
+  await command("join",await active(),bob,false);
 });

@@ -1,7 +1,9 @@
 export type Queue = {
   id: string;
   title: string;
+  /** Registration opening time; legacy database column name retained. */
   starts_at: string;
+  registration_open: boolean;
   note: string;
   status: "open" | "closed" | "finished";
   revision: number;

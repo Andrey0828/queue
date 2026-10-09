@@ -19,7 +19,7 @@ export async function rpc<T>(name: string, args: Record<string, unknown>): Promi
   } catch { throw new AppError("DATABASE_UNAVAILABLE", 503); }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    const known = ["FORBIDDEN","NAME_LOCKED","INVALID_INPUT","ACTIVE_EXISTS","QUEUE_NOT_ACTIVE","STALE_QUEUE","REGISTRATION_CLOSED","LOGIN_REQUIRED","ALREADY_DONE","QUEUE_FULL","INVALID_POSITION","ENTRY_NOT_FOUND","NOT_FIRST","INVALID_ACTION","DUPLICATE_NAME"];
+    const known = ["FORBIDDEN","NAME_LOCKED","INVALID_INPUT","ACTIVE_EXISTS","QUEUE_NOT_ACTIVE","STALE_QUEUE","REGISTRATION_CLOSED","REGISTRATION_NOT_STARTED","LOGIN_REQUIRED","ALREADY_DONE","QUEUE_FULL","INVALID_POSITION","ENTRY_NOT_FOUND","NOT_FIRST","INVALID_ACTION","DUPLICATE_NAME"];
     if (known.includes(error.message)) throw new AppError(error.message, error.message === "STALE_QUEUE" ? 409 : 400);
     // Log only a database error code, never credentials or request payloads.
     console.error("Database RPC failed", name, error.code ?? response.status);
