@@ -1,5 +1,5 @@
 export class AppError extends Error {
-  constructor(public code: string, public status = 400) { super(code); }
+  constructor(public code: string, public status = 400, public retryAfter?: number) { super(code); }
 }
 export function isConfigured() {
   return Boolean(process.env.SUPABASE_URL?.startsWith("https://") &&
@@ -29,5 +29,5 @@ export async function rpc<T>(name: string, args: Record<string, unknown>): Promi
 }
 export async function limit(key: string, attempts: number, seconds: number) {
   const allowed = await rpc<boolean>("take_rate_limit", { p_key: key, p_limit: attempts, p_seconds: seconds });
-  if (!allowed) throw new AppError("RATE_LIMIT", 429);
+  if (!allowed) throw new AppError("RATE_LIMIT", 429, seconds);
 }

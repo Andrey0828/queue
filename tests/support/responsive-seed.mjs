@@ -1,9 +1,12 @@
 // Populate ONLY the isolated localhost preview, never a real Supabase project.
 // Run after: node tests/support/preview.mjs
 import assert from 'node:assert/strict';
+import { setTimeout as delay } from 'node:timers/promises';
 const origin = 'http://localhost:3000';
 let cookie = '';
 async function action(payload) {
+  // Keep fixture creation within the same burst limits as the real admin UI.
+  await delay(700);
   const response = await fetch(`${origin}/api/actions`, {
     method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json', Cookie: cookie},
     body: JSON.stringify(payload),

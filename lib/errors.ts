@@ -26,8 +26,12 @@ export function errorResponse(error: unknown) {
   const known = error instanceof AppError;
   if (!known) console.error("Unexpected API error", error instanceof Error ? error.name : "unknown");
   const code = known ? error.code : "INTERNAL";
-  return NextResponse.json({ error: messages[code] ?? "Не удалось выполнить действие. Попробуйте ещё раз.", code }, {
+  const retryAfter = known && code === "RATE_LIMIT" ? error.retryAfter ?? 60 : undefined;
+  const message = retryAfter
+    ? `Слишком много действий. Подождите до ${retryAfter < 60 ? retryAfter + " сек." : Math.ceil(retryAfter / 60) + " мин."} и повторите попытку.`
+    : messages[code] ?? "Не удалось выполнить действие. Попробуйте ещё раз.";
+  return NextResponse.json({ error: message, code, ...(retryAfter ? { retryAfter } : {}) }, {
     status: known ? error.status : 500,
-    headers: { "Cache-Control": "no-store", ...(code === "RATE_LIMIT" ? { "Retry-After": "60" } : {}) },
+    headers: { "Cache-Control": "no-store", ...(retryAfter ? { "Retry-After": String(retryAfter) } : {}) },
   });
 }

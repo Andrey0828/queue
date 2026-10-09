@@ -12,6 +12,7 @@ export function useQueue(enabled: boolean, selectedQueue: string | null, offset:
   const sequence = useRef(0);
   const inFlight = useRef(false);
   const mutating = useRef(false);
+  const blockedUntil = useRef(0);
   const currentKey = useRef(key);
   currentKey.current = key;
 
@@ -52,11 +53,22 @@ export function useQueue(enabled: boolean, selectedQueue: string | null, offset:
 
   const act = async (input: Record<string, unknown>, success = "Готово") => {
     if (mutating.current) return false;
+    if (Date.now() < blockedUntil.current) {
+      const seconds = Math.ceil((blockedUntil.current - Date.now()) / 1000);
+      setNotice(`Слишком много действий. Повторите через ${seconds} сек.`);
+      return false;
+    }
     mutating.current = true; setBusy(true); setNotice("");
     try {
       const response = await fetch("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
       const json = await response.json();
       if (!response.ok) {
+        if (response.status === 429) {
+          const seconds = Number(response.headers.get("Retry-After")) || 60;
+          blockedUntil.current = Date.now() + Math.min(900, Math.max(1, seconds)) * 1000;
+          setNotice(json.error || "Слишком много действий. Подождите и повторите попытку.");
+          return false;
+        }
         await refresh(true);
         setNotice(json.error || "Не удалось выполнить действие.");
         return false;
