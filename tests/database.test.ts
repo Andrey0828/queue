@@ -171,3 +171,25 @@ test("editing opening time preserves places and gates new joins", async () => {
   assert.equal((await snapshot()).queue?.registration_open,true);
   await command("join",await active(),bob,false);
 });
+
+
+test("comments are public, survive completion and archive, and reset on rejoin", async () => {
+  const text = "Лабораторная № 3\n<script>alert(1)</script>";
+  await command("join",{...await active(),comment:text},alice,false);
+  await command("join",{...await active(),comment:"Повтор запроса"},alice,false);
+  assert.equal((await snapshot(null,false)).entries[0].comment,text);
+  const migration = await readFile(new URL("../supabase/migrations/20261010_entry_comments.sql",import.meta.url),"utf8");
+  await db.exec(migration); await db.exec(migration);
+  assert.equal((await snapshot()).entries[0].comment,text);
+  await command("leave",await active(),alice,false);
+  await command("join",await active(),alice,false);
+  assert.equal((await snapshot()).entries[0].comment,"");
+  await command("join",{...await active(),comment:"Б".repeat(200)},bob,false);
+  await assert.rejects(command("join",{...await active(),comment:"Б".repeat(201)},claire,false),/INVALID_INPUT/);
+  const state = await snapshot();
+  await command("complete",{...await active(),entryId:state.entries[0].id});
+  await command("complete",{...await active(),entryId:state.entries[1].id});
+  await command("finish",await active());
+  const archived = await snapshot(null,false,state.queue!.id);
+  assert.equal(archived.entries.find(e=>e.name==="Петров Борис")?.comment,"Б".repeat(200));
+});

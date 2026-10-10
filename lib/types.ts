@@ -11,6 +11,7 @@ export type Queue = {
   finished_at: string | null;
 };
 export type Entry = {
+  comment: string;
   id: string;
   name: string;
   position: number;

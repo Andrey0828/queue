@@ -61,3 +61,5 @@ body {
   .dialog-actions { margin-top: 16px; }
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+.entry-comment{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;font-weight:400;color:var(--muted);line-height:1.5;margin-top:4px}.join-form{text-align:left}.join-form textarea{min-height:72px}.completed-list .entry-info{min-width:0}

@@ -11,7 +11,7 @@ export const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("register"), name: personName }),
   z.object({ action: z.literal("adminLogin"), passphrase: z.string().min(1).max(256) }),
   z.object({ action: z.literal("adminLogout") }),
-  z.object({ action: z.literal("join"), queueId }),
+  z.object({ action: z.literal("join"), queueId, comment: z.string().trim().max(200).default("") }),
   z.object({ action: z.literal("leave"), queueId }),
   z.object({ action: z.literal("create"), ...details }),
   z.object({ action: z.literal("edit"), ...adminBase, ...details }),

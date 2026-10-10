@@ -1,82 +1,6 @@
--- Перед парой · schema v1
--- Run once in Supabase SQL Editor. Safe to re-run; existing queues are preserved.
+-- Apply after earlier migrations. Preserves queues and entries.
 begin;
-
-create table if not exists public.members (
-  id uuid primary key,
-  name text not null check (char_length(name) between 2 and 80),
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.queues (
-  id uuid primary key default gen_random_uuid(),
-  title text not null check (char_length(title) between 2 and 100),
-  starts_at timestamptz not null,
-  note text not null default '' check (char_length(note) <= 300),
-  status text not null default 'open' check (status in ('open','closed','finished')),
-  revision integer not null default 1,
-  created_at timestamptz not null default now(),
-  finished_at timestamptz
-);
-create unique index if not exists one_active_queue on public.queues ((true)) where status <> 'finished';
-create index if not exists queues_history on public.queues (created_at desc);
-
-create table if not exists public.entries (
-  id uuid primary key default gen_random_uuid(),
-  queue_id uuid not null references public.queues(id) on delete cascade,
-  member_id uuid references public.members(id),
-  name text not null check (char_length(name) between 2 and 80),
-  position integer not null check (position >= 1),
-  status text not null default 'waiting' check (status in ('waiting','done','left','removed')),
-  joined_at timestamptz not null default now(),
-  completed_at timestamptz,
-  unique (queue_id, member_id)
-);
 alter table public.entries add column if not exists comment text not null default '' check (char_length(comment) <= 200);
-create unique index if not exists entry_unique_active_name on public.entries
-  (queue_id, lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))) where status in ('waiting','done');
-create index if not exists entries_queue on public.entries (queue_id, status, position);
-
-create table if not exists public.audit_log (
-  id bigint generated always as identity primary key,
-  queue_id uuid not null references public.queues(id) on delete cascade,
-  action text not null,
-  description text not null,
-  actor_role text not null check (actor_role in ('admin','member')),
-  created_at timestamptz not null default now()
-);
-create index if not exists audit_queue on public.audit_log (queue_id, id desc);
-
-create table if not exists public.rate_limits (
-  key text primary key,
-  attempts integer not null,
-  expires_at timestamptz not null
-);
-
--- No browser role may read or mutate tables, even with a guessed API URL.
-alter table public.members enable row level security;
-alter table public.queues enable row level security;
-alter table public.entries enable row level security;
-alter table public.audit_log enable row level security;
-alter table public.rate_limits enable row level security;
-revoke all on public.members, public.queues, public.entries, public.audit_log, public.rate_limits from anon, authenticated;
-grant all on public.members, public.queues, public.entries, public.audit_log, public.rate_limits to service_role;
-grant usage, select on sequence public.audit_log_id_seq to service_role;
-
-create or replace function public.take_rate_limit(p_key text, p_limit integer, p_seconds integer)
-returns boolean language plpgsql set search_path = '' as $$
-declare v_attempts integer;
-begin
-  delete from public.rate_limits where expires_at < now() - interval '1 day';
-  insert into public.rate_limits (key, attempts, expires_at)
-  values (p_key, 1, now() + make_interval(secs => p_seconds))
-  on conflict (key) do update set
-    attempts = case when public.rate_limits.expires_at <= now() then 1 else public.rate_limits.attempts + 1 end,
-    expires_at = case when public.rate_limits.expires_at <= now() then now() + make_interval(secs => p_seconds) else public.rate_limits.expires_at end
-  returning attempts into v_attempts;
-  return v_attempts <= p_limit;
-end;
-$$;
 
 create or replace function public.queue_command(p_action text, p_actor uuid, p_admin boolean, p_payload jsonb)
 returns jsonb language plpgsql set search_path = '' as $$
@@ -234,12 +158,5 @@ returns jsonb language sql stable set search_path = '' as $$
   );
 $$;
 
--- PostgreSQL grants function execution to PUBLIC by default. Revoke it explicitly.
-revoke all on function public.take_rate_limit(text,integer,integer) from public, anon, authenticated;
-revoke all on function public.queue_command(text,uuid,boolean,jsonb) from public, anon, authenticated;
-revoke all on function public.queue_state(uuid,boolean,uuid,integer) from public, anon, authenticated;
-grant execute on function public.take_rate_limit(text,integer,integer) to service_role;
-grant execute on function public.queue_command(text,uuid,boolean,jsonb) to service_role;
-grant execute on function public.queue_state(uuid,boolean,uuid,integer) to service_role;
 
 commit;

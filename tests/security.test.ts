@@ -36,3 +36,13 @@ test("input validates dates, names, revision and target positions", () => {
   assert.equal(actionSchema.safeParse({action:"finish",queueId:randomUUID()}).success,false);
   assert.equal(actionSchema.safeParse({action:"adminLogin",passphrase:"x".repeat(300)}).success,false);
 });
+
+
+test("join comments are optional, trimmed and bounded", () => {
+  const base = {action:"join",queueId:randomUUID()};
+  assert.deepEqual(actionSchema.parse(base),{...base,comment:""});
+  assert.deepEqual(actionSchema.parse({...base,comment:"  Работа № 3  "}),{...base,comment:"Работа № 3"});
+  assert.equal(actionSchema.safeParse({...base,comment:"а".repeat(200)}).success,true);
+  assert.equal(actionSchema.safeParse({...base,comment:"а".repeat(201)}).success,false);
+  assert.equal(actionSchema.safeParse({...base,comment:123}).success,false);
+});
