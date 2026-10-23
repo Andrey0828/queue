@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { NextRequest } from "next/server";
+import { GET } from "../app/api/state/route";
 import { POST } from "../app/api/actions/route";
 import { signSession } from "../lib/session";
 import { requestIpKey } from "../lib/anti-spam";
@@ -30,6 +31,7 @@ before(async () => {
   await db.exec("create role anon; create role authenticated; create role service_role bypassrls;");
   await db.exec(await readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"));
   const signatures: Record<string, string[]> = {
+    queue_state: ["p_actor", "p_admin", "p_queue_id", "p_offset"],
     queue_command: ["p_action", "p_actor", "p_admin", "p_payload"],
     take_rate_limit: ["p_key", "p_limit", "p_seconds"],
   };
@@ -120,4 +122,24 @@ test("untrusted local proxy headers cannot create arbitrary rate-limit buckets",
   try {
     assert.equal(requestIpKey(new Headers({"x-forwarded-for":"192.0.2.1"})),requestIpKey(new Headers({"x-forwarded-for":"192.0.2.2"})));
   } finally { process.env.VERCEL = "1"; }
+});
+
+
+test("admin login grants a signed role; member, tampered and expired cookies cannot administer", async () => {
+  const state = async (cookie: string) => (await GET(new NextRequest("https://queue-test.invalid/api/state",{headers:{Cookie:cookie}}))).json();
+  const login = await post({action:"adminLogin",passphrase:"test-only-admin"});
+  assert.equal(login.status,200);
+  const setCookie = login.headers.get("set-cookie")!;
+  assert.match(setCookie,/HttpOnly/i);
+  const cookie = setCookie.split(";")[0];
+  assert.equal((await state(cookie)).isAdmin,true);
+  assert.equal((await post({action:"toggle",queueId:queue,revision:1},cookie)).status,200);
+  for (const invalid of [memberCookie(),"pq_admin=invalid", "pq_admin="+signSession(randomUUID(),"admin",1,0)]) {
+    assert.equal((await state(invalid)).isAdmin,false);
+    assert.equal((await post({action:"toggle",queueId:queue,revision:2},invalid)).status,403);
+  }
+  const logout = await post({action:"adminLogout"},cookie);
+  assert.equal(logout.status,200);
+  assert.match(logout.headers.get("set-cookie")!,/Max-Age=0/i);
+  assert.equal((await state(logout.headers.get("set-cookie")!.split(";")[0])).isAdmin,false);
 });

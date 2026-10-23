@@ -27,6 +27,10 @@ globalThis.fetch=async(input,init)=>{
   if(!Object.hasOwn(signatures,name)) return Response.json({}, {status:404});
   try {
     const args=JSON.parse(init.body);
+    // Optional slow admin snapshot to reproduce login UI stalls locally.
+    if (name === 'queue_state' && args.p_admin && process.env.TEST_ADMIN_STATE_DELAY_MS) {
+      await new Promise(resolve => setTimeout(resolve, Number(process.env.TEST_ADMIN_STATE_DELAY_MS)));
+    }
     const keys=signatures[name];
     const values=keys.map(k=>typeof args[k]==='object'&&args[k]!==null?JSON.stringify(args[k]):args[k]);
     const result=await db.query(`select public.${name}(${keys.map((_,i)=>`$${i+1}`).join(',')}) as result`,values);

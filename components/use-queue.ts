@@ -38,7 +38,7 @@ export function useQueue(enabled: boolean, selectedQueue: string | null, offset:
     if (!enabled) return;
     void refresh(true);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !mutating.current) void refresh(); }, 8000);
-    const wake = () => { if (document.visibilityState === "visible") void refresh(true); };
+    const wake = () => { if (document.visibilityState === "visible" && !mutating.current) void refresh(true); };
     const offline = () => setError("Нет интернета. Показана последняя загруженная очередь; действия временно недоступны.");
     window.addEventListener("online", wake); window.addEventListener("offline", offline);
     window.addEventListener("focus", wake); document.addEventListener("visibilitychange", wake);
@@ -59,6 +59,8 @@ export function useQueue(enabled: boolean, selectedQueue: string | null, offset:
       return false;
     }
     mutating.current = true; setBusy(true); setNotice("");
+    // Discard any snapshot started before this mutation (especially a role change).
+    ++sequence.current; inFlight.current = false;
     try {
       const response = await fetch("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
       const json = await response.json();
@@ -69,16 +71,24 @@ export function useQueue(enabled: boolean, selectedQueue: string | null, offset:
           setNotice(json.error || "Слишком много действий. Подождите и повторите попытку.");
           return false;
         }
-        await refresh(true);
+        void refresh(true);
         setNotice(json.error || "Не удалось выполнить действие.");
         return false;
       }
-      await refresh(true);
+      if (input.action === "adminLogin" || input.action === "adminLogout") {
+        // The successful action already confirms the cookie change. A slow/failed
+        // queue read must not keep the login dialog and every control locked.
+        const isAdmin = input.action === "adminLogin";
+        setResult(previous => previous ? { ...previous, data: { ...previous.data, isAdmin, audit: [] } } : previous);
+        void refresh(true);
+      } else {
+        await refresh(true);
+      }
       setNotice(success);
       return true;
     } catch {
       setNotice("Не удалось получить ответ. Обновите очередь перед повторной попыткой: действие могло сохраниться.");
-      await refresh(true);
+      void refresh(true);
       return false;
     } finally { mutating.current = false; setBusy(false); }
   };
